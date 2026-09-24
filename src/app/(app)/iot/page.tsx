@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Cpu, Radio } from "lucide-react";
 import { prisma } from "@/lib/prisma";
+import { appUrl } from "@/lib/app-url";
 import { hasNetworkView, requireMember } from "@/lib/session";
 import { METRICS, safeJson } from "@/lib/domain";
 import { Card, CardHeader, Empty, Kicker, PageHeader } from "@/components/ui";
@@ -28,7 +29,7 @@ export default async function IotPage({ searchParams }: { searchParams: Promise<
     prisma.lot.findMany({ where: { ownerId: orgId, status: "ACTIVE" }, select: { id: true, code: true } }),
     prisma.field.findMany({ where: { orgId }, select: { id: true, name: true } }),
   ]);
-  const origin = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000";
+  const origin = appUrl();
 
   return (
     <div className="space-y-8">

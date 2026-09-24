@@ -108,6 +108,19 @@ export type InvokeResult<T> = { result: T; txHash: string; blockNumber: number }
  * atomically. A ContractError rolls everything back and logs a REJECTED tx.
  */
 export async function invoke<T>(meta: InvokeMeta, body: InvokeBody<T>): Promise<InvokeResult<T>> {
+  // Two submissions racing for the same block number: the loser retries on top of the new head.
+  for (let attempt = 0; ; attempt++) {
+    try {
+      return await invokeOnce(meta, body);
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      if (code === "P2002" && attempt < 4) continue;
+      throw err;
+    }
+  }
+}
+
+async function invokeOnce<T>(meta: InvokeMeta, body: InvokeBody<T>): Promise<InvokeResult<T>> {
   const at = meta.at ?? new Date();
   try {
     return await prisma.$transaction(

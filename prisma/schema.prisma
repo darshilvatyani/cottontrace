@@ -1,6 +1,5 @@
 // CottonTrace — Seed-to-Cloth traceability platform
-// SQLite is used for zero-setup local development. To switch to PostgreSQL,
-// change the provider below and swap the driver adapter in src/lib/prisma.ts.
+// PostgreSQL (Neon on Vercel). Connection strings live in prisma.config.ts / .env.
 
 generator client {
   provider = "prisma-client"
@@ -8,7 +7,7 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
+  provider = "postgresql"
 }
 
 // ───────────────────────────── Better Auth ─────────────────────────────
@@ -263,6 +262,8 @@ model Document {
   size         Int
   sha256       String
   storagePath  String
+  // set while the tamper demo has swapped in a forged copy
+  originalPath String?
   txHash       String?
   lotId        String?
   lot          Lot?         @relation(fields: [lotId], references: [id])
@@ -356,4 +357,13 @@ model Passport {
   txHash      String?
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
+}
+
+// ─────────────────────────── Demo support ───────────────────────────
+
+// Holds the original payload while the admin "insider tampering" demo is active.
+model DemoBackup {
+  key       String   @id
+  value     String
+  createdAt DateTime @default(now())
 }

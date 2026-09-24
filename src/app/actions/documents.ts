@@ -6,7 +6,7 @@ import { sha256, txHashOf } from "@/lib/chain/ledger";
 import { DOC_KINDS } from "@/lib/domain";
 import { prisma } from "@/lib/prisma";
 import { actorOf, requireMember } from "@/lib/session";
-import { readStored, restoreStored, saveFile, tamperStored } from "@/lib/storage";
+import { deleteStored, forgeCopy, readStored, saveFile } from "@/lib/storage";
 import { run } from "./_run";
 
 const MAX_BYTES = 8 * 1024 * 1024;
@@ -22,7 +22,7 @@ export async function uploadDocumentAction(form: FormData) {
     if (!DOC_KINDS.includes(kind as (typeof DOC_KINDS)[number])) throw new Error("Unknown document type");
     const bytes = Buffer.from(await file.arrayBuffer());
     const digest = sha256(bytes);
-    const storagePath = await saveFile(file.name, bytes);
+    const storagePath = await saveFile(file.name, bytes, file.type || "application/octet-stream");
     const { result, txHash, blockNumber } = await anchorDocument(actorOf(user), {
       lotId,
       name: file.name,
@@ -88,7 +88,11 @@ export async function tamperDocumentAction(documentId: string) {
     const user = await requireMember();
     if (!["ADMIN", "AUDITOR"].includes(user.role)) throw new Error("Only auditors can run the tamper demonstration");
     const doc = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
-    await tamperStored(doc.storagePath);
+    // Swap in a forged copy behind the ledger's back; the original is kept for restore.
+    if (!doc.originalPath) {
+      const forged = await forgeCopy(doc.storagePath, doc.name);
+      await prisma.document.update({ where: { id: doc.id }, data: { storagePath: forged, originalPath: doc.storagePath } });
+    }
     revalidatePath("/documents");
     return integrityOf(documentId);
   });
@@ -99,7 +103,10 @@ export async function restoreDocumentAction(documentId: string) {
     const user = await requireMember();
     if (!["ADMIN", "AUDITOR"].includes(user.role)) throw new Error("Only auditors can restore documents");
     const doc = await prisma.document.findUniqueOrThrow({ where: { id: documentId } });
-    await restoreStored(doc.storagePath);
+    if (doc.originalPath) {
+      await deleteStored(doc.storagePath);
+      await prisma.document.update({ where: { id: doc.id }, data: { storagePath: doc.originalPath, originalPath: null } });
+    }
     revalidatePath("/documents");
     return integrityOf(documentId);
   });

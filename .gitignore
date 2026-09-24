@@ -45,5 +45,6 @@ next-env.d.ts
 /src/generated/prisma
 /prisma/*.db
 /prisma/*.db-journal
+/prisma/pglite
 /storage/documents/*
 !/storage/documents/.gitkeep

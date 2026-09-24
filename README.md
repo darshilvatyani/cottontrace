@@ -7,14 +7,15 @@ platform with IoT, AI anomaly detection, GIS maps, 3D graphics and Digital Produ
 Farm A → Gin A → Spinning Mill A → Knitting A → Dye House A → Garment Factory A → Brand A
 ```
 
-## Quick start
+## Quick start (local)
 
-Requires Node.js 20+. No external database or services are needed; the app uses SQLite.
+Requires Node.js 20+. Local development uses an embedded Postgres (PGlite), so no database install or internet connection is needed.
 
 ```bash
 npm install
-npm run setup      # generate Prisma client, create the SQLite DB, seed the demo chain
-npm run dev        # http://localhost:3000
+npm run db:local          # terminal 1 — local Postgres on port 54329 (leave running)
+npm run setup             # terminal 2 — create tables + seed the demo chain
+npm run dev               # http://localhost:3000
 ```
 
 Every demo account uses the password **`cotton123`**. The sign-in page has one-click role buttons.
@@ -34,7 +35,7 @@ Every demo account uses the password **`cotton123`**. The sign-in page has one-c
 
 Public passport (no login): **http://localhost:3000/p/KAPAS-TEE-001**
 
-`npm run db:reset` rebuilds the demo from scratch.
+`npm run db:reset` rebuilds the demo from scratch. It works against whichever database `DATABASE_URL` points to.
 
 ## Tech stack
 
@@ -42,7 +43,8 @@ Public passport (no login): **http://localhost:3000/p/KAPAS-TEE-001**
 |---|---|
 | Framework | Next.js 16 (App Router, Server Actions, Turbopack), React 19, TypeScript |
 | Auth | Better Auth (email + password, Prisma adapter, role and organisation on the user) |
-| Database | Prisma 7 + SQLite (`better-sqlite3` driver adapter) |
+| Database | Prisma 7 + PostgreSQL (`@prisma/adapter-pg`). Neon on Vercel, PGlite locally |
+| File storage | Vercel Blob (private) for off-chain documents; local disk when no Blob token is set |
 | Ledger | Custom permissioned ledger modelled on Hyperledger Fabric (`src/lib/chain`) |
 | Styling | Tailwind CSS v4, Fraunces / Hanken Grotesk / JetBrains Mono |
 | Graphics | React Three Fiber (3D garment), Motion (fibre→garment animation), custom SVG genealogy graph |
@@ -57,7 +59,7 @@ Public passport (no login): **http://localhost:3000/p/KAPAS-TEE-001**
 | Parent → child relationships (split, mix, transform) | `LotLink`. Partial handoffs split a lot into a linked child (`…-S1`) |
 | Permissioned blockchain | `src/lib/chain/ledger.ts`: SHA-256 transaction hashes, Merkle roots, hash-linked blocks, per-org MSP identities, full-chain verification |
 | Smart contracts | `src/lib/chain/contracts.ts`: `LotContract`, `TransferContract`, `EventContract`, `CertificationContract`, `DocumentContract`, `SensorContract`, `PassportContract`. They enforce existence, ownership, quantity, role and **mass balance** (e.g. a bale can't exceed 45% of seed-cotton input). Rejected invocations are logged. |
-| Off-chain documents + hash verification | `storage/documents/` holds the files; only the SHA-256 goes on-chain. **Documents → Tamper** shows the mismatch. |
+| Off-chain documents + hash verification | Files live in Vercel Blob (or `storage/` locally); only the SHA-256 goes on-chain. **Documents → Tamper** swaps in a forged copy and verification shows the mismatch. |
 | IoT (ESP32 / Raspberry Pi, MQTT) | Device registry, `POST /api/iot/ingest` with a per-device key, range validation, Merkle-anchoring of reading batches, simulator |
 | AI / analytics | `src/lib/ai/detector.ts`: robust z-scores (median/MAD) with a logistic score, plus domain rules. Findings go to an auditor review queue. |
 | QR + Digital Product Passport | `/p/[id]` (public), `/api/qr/[id]`, printable hang tag at `/tag/[id]`, camera scanner at `/scan` |
@@ -96,8 +98,23 @@ src/app/p/[publicId]/     public Digital Product Passport
 src/app/actions/          server actions (validate with Zod → invoke contract)
 ```
 
+## Deploying to Vercel
+
+1. **Import** the GitHub repo at vercel.com → *Add New → Project*. Keep the defaults: framework Next.js, and the `vercel-build` script runs `prisma db push` and then `next build`.
+2. **Storage tab → Create → Neon (Postgres)**, then connect it to the project. This sets `DATABASE_URL` and `DATABASE_URL_UNPOOLED`.
+3. **Storage tab → Create → Blob**, choose **Private** access, and connect it. This sets `BLOB_READ_WRITE_TOKEN`. If you created a public store, also set `BLOB_ACCESS=public`.
+4. **Settings → Environment Variables:** add `BETTER_AUTH_SECRET` (`openssl rand -base64 32`). `BETTER_AUTH_URL` and `NEXT_PUBLIC_APP_URL` are optional; they default to the Vercel production URL.
+5. **Redeploy** so the build sees the new variables.
+6. **Load the demo data** once, from your machine:
+   ```bash
+   npx vercel link
+   npx vercel env pull .env.production.local --environment=production
+   DOTENV_CONFIG_PATH=.env.production.local npx prisma db seed
+   ```
+
+The SQLite version (for Railway or any host with a persistent disk) is preserved at the git tag `sqlite-railway`.
+
 ## Notes and limitations
 
 - The ledger runs in-process to keep the prototype self-contained. The contract/ledger boundary (`invoke()`) is where a Hyperledger Fabric gateway client would plug in.
-- To use PostgreSQL instead of SQLite, change `provider` in `schema.prisma` and swap `PrismaBetterSqlite3` for `@prisma/adapter-pg` in `src/lib/prisma.ts`.
 - As the report notes, the ledger proves records weren't altered after the fact; it can't prove the original real-world data was true. That's the job of the auditor workflow and the AI flags.

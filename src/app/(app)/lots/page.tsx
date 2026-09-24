@@ -25,7 +25,7 @@ export default async function LotsPage({ searchParams }: { searchParams: SP }) {
   if (sp.type && LOT_ORDER.includes(sp.type as LotType)) where.type = sp.type;
   if (status === "live") where.status = { in: ["ACTIVE", "IN_TRANSIT"] };
   else if (status !== "all") where.status = status;
-  if (sp.q) where.OR = [{ code: { contains: sp.q.toUpperCase() } }, { name: { contains: sp.q } }];
+  if (sp.q) where.OR = [{ code: { contains: sp.q.toUpperCase() } }, { name: { contains: sp.q, mode: "insensitive" } }];
 
   const [lots, counts] = await Promise.all([
     prisma.lot.findMany({ where, include: { owner: true }, orderBy: [{ createdAt: "desc" }], take: 120 }),

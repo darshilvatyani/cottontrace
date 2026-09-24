@@ -8,8 +8,6 @@
  */
 import "dotenv/config";
 import { randomUUID } from "node:crypto";
-import { rm, mkdir } from "node:fs/promises";
-import path from "node:path";
 import { hashPassword } from "better-auth/crypto";
 import { prisma } from "../src/lib/prisma";
 import { ensureGenesis, sha256, merkleRoot, canonical } from "../src/lib/chain/ledger";
@@ -27,7 +25,7 @@ import {
 import { ORG_TYPES, type OrgType } from "../src/lib/domain";
 import { simulateReadings } from "../src/lib/iot";
 import { runAnomalyScan } from "../src/lib/ai/detector";
-import { saveFile, STORAGE_DIR, STORAGE_ROOT } from "../src/lib/storage";
+import { clearStorage, saveFile } from "../src/lib/storage";
 
 const PASSWORD = "cotton123";
 const now = Date.now();
@@ -84,9 +82,8 @@ async function reset() {
   await prisma.verification.deleteMany();
   await prisma.user.deleteMany();
   await prisma.organization.deleteMany();
-  await rm(STORAGE_DIR, { recursive: true, force: true });
-  await mkdir(STORAGE_DIR, { recursive: true });
-  await rm(path.join(STORAGE_ROOT, "ledger-tamper.json"), { force: true });
+  await prisma.demoBackup.deleteMany();
+  await clearStorage();
 }
 
 async function quiet<T>(p: Promise<T>) {
@@ -180,7 +177,7 @@ async function main() {
 
   const doc = async (a: Actor, lotId: string, name: string, kind: string, body: string, at: Date) => {
     const bytes = Buffer.from(body);
-    const storagePath = await saveFile(name, bytes);
+    const storagePath = await saveFile(name, bytes, "text/plain");
     await anchorDocument(a, { lotId, name, kind, sha256: sha256(bytes), size: bytes.length, mimeType: "text/plain", storagePath }, { at });
   };
   const organicCert = `SCOPE CERTIFICATE — NPOP ORGANIC\nOperator: Shivam Organic Farm, Rajkot, Gujarat\nFields: F-A1 (4.2 ha), F-A2 (2.8 ha)\nCrop: Cotton (Shankar-6)\nValid: Kharif 2026\nIssued by: IndiCert Textile Assurance\nCertificate no.: IC-NPOP-26-01187\n`;
