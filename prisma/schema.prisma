@@ -1,0 +1,359 @@
+// CottonTrace — Seed-to-Cloth traceability platform
+// SQLite is used for zero-setup local development. To switch to PostgreSQL,
+// change the provider below and swap the driver adapter in src/lib/prisma.ts.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ───────────────────────────── Better Auth ─────────────────────────────
+
+model User {
+  id             String        @id
+  name           String
+  email          String        @unique
+  emailVerified  Boolean       @default(false)
+  image          String?
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+  // Supply-chain role: FARMER | GINNER | SPINNER | WEAVER | DYER | MANUFACTURER | BRAND | AUDITOR | ADMIN | PENDING
+  role           String        @default("PENDING")
+  organizationId String?
+  organization   Organization? @relation(fields: [organizationId], references: [id])
+
+  sessions        Session[]
+  accounts        Account[]
+  events          TraceEvent[]
+  documents       Document[]
+  reviews         Anomaly[]
+  createdLots     Lot[]        @relation("lotCreatedBy")
+  createdTransfer Transfer[]
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id
+  expiresAt DateTime
+  token     String   @unique
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  ipAddress String?
+  userAgent String?
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ─────────────────────────── Supply-chain network ───────────────────────────
+
+model Organization {
+  id             String   @id @default(cuid())
+  name           String
+  // FARM | GIN | SPINNING_MILL | WEAVING_UNIT | DYEING_UNIT | GARMENT_FACTORY | BRAND | AUDITOR
+  type           String
+  code           String   @unique
+  mspId          String   @unique // permissioned-ledger identity (Membership Service Provider)
+  city           String
+  state          String
+  lat            Float
+  lng            Float
+  certifications String   @default("[]") // JSON string[]
+  createdAt      DateTime @default(now())
+
+  users            User[]
+  fields           Field[]
+  ownedLots        Lot[]        @relation("lotOwner")
+  createdLots      Lot[]        @relation("lotCreator")
+  events           TraceEvent[]
+  outgoing         Transfer[]   @relation("transferFrom")
+  incoming         Transfer[]   @relation("transferTo")
+  documents        Document[]
+  devices          Device[]
+  anomalies        Anomaly[]
+}
+
+model Field {
+  id         String       @id @default(cuid())
+  code       String       @unique
+  name       String
+  areaHa     Float
+  soilType   String
+  irrigation String
+  lat        Float
+  lng        Float
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  lots       Lot[]
+  devices    Device[]
+  createdAt  DateTime     @default(now())
+}
+
+// ─────────────────────────── Material identities ───────────────────────────
+
+model Lot {
+  id          String       @id @default(cuid())
+  code        String       @unique
+  // SEED_LOT | HARVEST_LOT | BALE | FIBRE_LOT | YARN_LOT | FABRIC_ROLL | DYED_FABRIC | GARMENT_BATCH
+  type        String
+  name        String
+  quantity    Float
+  available   Float
+  unit        String
+  // ACTIVE | IN_TRANSIT | CONSUMED | SOLD
+  status      String       @default("ACTIVE")
+  attributes  String       @default("{}") // JSON
+  season      String?
+  certified   Boolean      @default(false)
+  txHash      String?
+  fieldId     String?
+  field       Field?       @relation(fields: [fieldId], references: [id])
+  ownerId     String
+  owner       Organization @relation("lotOwner", fields: [ownerId], references: [id])
+  creatorId   String
+  creator     Organization @relation("lotCreator", fields: [creatorId], references: [id])
+  createdById String?
+  createdBy   User?        @relation("lotCreatedBy", fields: [createdById], references: [id])
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  parents   LotLink[]       @relation("linkChild")
+  children  LotLink[]       @relation("linkParent")
+  events    TraceEvent[]
+  transfers Transfer[]
+  documents Document[]
+  anomalies Anomaly[]
+  readings  SensorReading[]
+  devices   Device[]
+  passport  Passport?
+
+  @@index([ownerId])
+  @@index([type])
+}
+
+// Parent → child transformation edges (splitting, mixing and conversion)
+model LotLink {
+  id        String   @id @default(cuid())
+  parentId  String
+  parent    Lot      @relation("linkParent", fields: [parentId], references: [id])
+  childId   String
+  child     Lot      @relation("linkChild", fields: [childId], references: [id])
+  quantity  Float
+  createdAt DateTime @default(now())
+
+  @@unique([parentId, childId])
+}
+
+model TraceEvent {
+  id         String       @id @default(cuid())
+  lotId      String
+  lot        Lot          @relation(fields: [lotId], references: [id])
+  // REGISTERED | SOWING | IRRIGATION | FERTILISER | HARVESTED | GINNED | MIXED | SPUN | WOVEN | DYED
+  // MANUFACTURED | QUALITY_TEST | TRANSFER_SENT | TRANSFER_RECEIVED | SPLIT | CERTIFIED | DOCUMENT_ANCHORED | PASSPORT_PUBLISHED
+  type       String
+  title      String
+  data       String       @default("{}")
+  orgId      String
+  org        Organization @relation(fields: [orgId], references: [id])
+  userId     String?
+  user       User?        @relation(fields: [userId], references: [id])
+  txHash     String?
+  occurredAt DateTime     @default(now())
+
+  @@index([lotId])
+}
+
+model Transfer {
+  id          String       @id @default(cuid())
+  lotId       String
+  lot         Lot          @relation(fields: [lotId], references: [id])
+  fromOrgId   String
+  fromOrg     Organization @relation("transferFrom", fields: [fromOrgId], references: [id])
+  toOrgId     String
+  toOrg       Organization @relation("transferTo", fields: [toOrgId], references: [id])
+  quantity    Float
+  // PENDING | ACCEPTED | REJECTED | CANCELLED
+  status      String       @default("PENDING")
+  note        String?
+  resultLotId String?
+  txHash      String?
+  createdById String?
+  createdBy   User?        @relation(fields: [createdById], references: [id])
+  createdAt   DateTime     @default(now())
+  respondedAt DateTime?
+}
+
+// ─────────────────────────── Permissioned ledger ───────────────────────────
+
+model Block {
+  number       Int        @id
+  hash         String     @unique
+  prevHash     String
+  merkleRoot   String
+  channel      String     @default("cotton-channel")
+  endorsers    String     @default("[]") // JSON MSP ids
+  timestamp    DateTime
+  transactions LedgerTx[]
+}
+
+model LedgerTx {
+  id           String   @id // transaction hash
+  blockNumber  Int?
+  block        Block?   @relation(fields: [blockNumber], references: [number])
+  contract     String
+  fn           String
+  args         String   // canonical JSON payload
+  submitterMsp String
+  lotCode      String?
+  // VALID | REJECTED
+  status       String
+  reason       String?
+  createdAt    DateTime
+
+  @@index([lotCode])
+}
+
+// ─────────────────────────── Off-chain documents ───────────────────────────
+
+model Document {
+  id           String       @id @default(cuid())
+  name         String
+  // CERTIFICATE | LAB_REPORT | PHOTO | INSPECTION | INVOICE | OTHER
+  kind         String
+  mimeType     String
+  size         Int
+  sha256       String
+  storagePath  String
+  txHash       String?
+  lotId        String?
+  lot          Lot?         @relation(fields: [lotId], references: [id])
+  orgId        String
+  org          Organization @relation(fields: [orgId], references: [id])
+  uploadedById String?
+  uploadedBy   User?        @relation(fields: [uploadedById], references: [id])
+  createdAt    DateTime     @default(now())
+}
+
+// ─────────────────────────────── IoT ───────────────────────────────
+
+model Device {
+  id         String          @id @default(cuid())
+  code       String          @unique
+  name       String
+  hardware   String // ESP32 | RASPBERRY_PI
+  metrics    String          @default("[]") // JSON metric keys
+  apiKey     String          @unique
+  topic      String // MQTT-style topic
+  orgId      String
+  org        Organization    @relation(fields: [orgId], references: [id])
+  fieldId    String?
+  field      Field?          @relation(fields: [fieldId], references: [id])
+  lotId      String?
+  lot        Lot?            @relation(fields: [lotId], references: [id])
+  lastSeenAt DateTime?
+  createdAt  DateTime        @default(now())
+  readings   SensorReading[]
+}
+
+model SensorReading {
+  id         String   @id @default(cuid())
+  deviceId   String
+  device     Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  lotId      String?
+  lot        Lot?     @relation(fields: [lotId], references: [id])
+  // TEMPERATURE | HUMIDITY | SOIL_MOISTURE | WATER | ENERGY
+  metric     String
+  value      Float
+  unit       String
+  valid      Boolean  @default(true)
+  recordedAt DateTime @default(now())
+
+  @@index([deviceId, recordedAt])
+}
+
+// ─────────────────────────── AI / analytics ───────────────────────────
+
+model Anomaly {
+  id           String        @id @default(cuid())
+  fingerprint  String        @unique
+  // YIELD_RATIO | DUPLICATE_RECORD | DUPLICATE_DOCUMENT | PROCESS_DURATION | MISSING_EVENT | SENSOR_OUTLIER | QUANTITY_OUTLIER | STALE_TRANSFER
+  kind         String
+  // LOW | MEDIUM | HIGH | CRITICAL
+  severity     String
+  score        Float
+  title        String
+  detail       String
+  evidence     String        @default("{}")
+  // OPEN | CONFIRMED | DISMISSED
+  status       String        @default("OPEN")
+  lotId        String?
+  lot          Lot?          @relation(fields: [lotId], references: [id])
+  orgId        String?
+  org          Organization? @relation(fields: [orgId], references: [id])
+  reviewedById String?
+  reviewedBy   User?         @relation(fields: [reviewedById], references: [id])
+  reviewNote   String?
+  reviewedAt   DateTime?
+  createdAt    DateTime      @default(now())
+}
+
+// ─────────────────────────── Digital Product Passport ───────────────────────────
+
+model Passport {
+  id          String   @id @default(cuid())
+  publicId    String   @unique
+  lotId       String   @unique
+  lot         Lot      @relation(fields: [lotId], references: [id])
+  productName String
+  style       String
+  colorName   String
+  colorHex    String
+  sizes       String
+  description String
+  care        String   @default("[]") // JSON string[]
+  endOfLife   String
+  published   Boolean  @default(false)
+  scanCount   Int      @default(0)
+  txHash      String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}

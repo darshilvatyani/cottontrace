@@ -1,26 +1,188 @@
 @import "tailwindcss";
 
-:root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
+@theme {
+  --color-paper: #f3ede2;
+  --color-paper-2: #eae2d3;
+  --color-card: #fbf8f2;
+  --color-ink: #1c1a16;
+  --color-ink-2: #4a453c;
+  --color-muted: #857d6e;
+  --color-line: #d9cfbd;
+  --color-indigo: #25337a;
+  --color-indigo-deep: #141b45;
+  --color-indigo-soft: #dfe2f2;
+  --color-madder: #b0412a;
+  --color-madder-soft: #f4dcd3;
+  --color-turmeric: #d6a021;
+  --color-turmeric-soft: #f6e8c3;
+  --color-leaf: #56733a;
+  --color-leaf-soft: #e1e8d3;
+  --color-teal: #0f6b63;
+  --color-teal-soft: #d4e8e5;
 
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
+  --font-display: var(--font-fraunces), ui-serif, Georgia, serif;
+  --font-sans: var(--font-hanken), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-jetbrains), ui-monospace, monospace;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+  --animate-marquee: marquee 38s linear infinite;
+  --animate-float: float 7s ease-in-out infinite;
+  --animate-sway: sway 6s ease-in-out infinite;
+
+  @keyframes marquee {
+    from { transform: translateX(0); }
+    to { transform: translateX(-50%); }
+  }
+  @keyframes float {
+    0%, 100% { transform: translateY(0) rotate(var(--r, 0deg)); }
+    50% { transform: translateY(-10px) rotate(var(--r, 0deg)); }
+  }
+  @keyframes sway {
+    0%, 100% { transform: rotate(-2.5deg); }
+    50% { transform: rotate(2.5deg); }
   }
 }
 
+:root {
+  color-scheme: light;
+}
+
+html {
+  background: var(--color-paper);
+}
+
 body {
-  background: var(--background);
-  color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--color-paper);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+::selection {
+  background: var(--color-turmeric);
+  color: var(--color-ink);
+}
+
+/* Paper grain — subtle fibre noise over the whole canvas */
+.grain {
+  position: relative;
+  isolation: isolate;
+}
+.grain::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .35  0 0 0 0 .3  0 0 0 0 .22  0 0 0 .12 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+/* Warp & weft — a woven crosshatch */
+.weave {
+  background-color: var(--color-indigo-deep);
+  background-image:
+    repeating-linear-gradient(0deg, rgba(255, 255, 255, 0.035) 0 2px, transparent 2px 6px),
+    repeating-linear-gradient(90deg, rgba(255, 255, 255, 0.045) 0 2px, transparent 2px 6px);
+}
+.weave-light {
+  background-image:
+    repeating-linear-gradient(0deg, rgba(60, 50, 30, 0.035) 0 1px, transparent 1px 7px),
+    repeating-linear-gradient(90deg, rgba(60, 50, 30, 0.035) 0 1px, transparent 1px 7px);
+}
+
+/* Ruled ledger paper */
+.ledger-lines {
+  background-image: repeating-linear-gradient(180deg, transparent 0 31px, rgba(37, 51, 122, 0.08) 31px 32px);
+}
+
+/* Running stitch border */
+.stitch {
+  position: relative;
+}
+.stitch::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dashed color-mix(in oklab, currentColor 28%, transparent);
+  border-radius: inherit;
+  pointer-events: none;
+}
+
+/* Hang-tag eyelet */
+.eyelet {
+  width: 14px;
+  height: 14px;
+  border-radius: 999px;
+  background: var(--color-paper);
+  box-shadow:
+    inset 0 1px 2px rgba(0, 0, 0, 0.25),
+    0 0 0 3px color-mix(in oklab, var(--color-turmeric) 70%, white);
+}
+
+/* Rubber stamp */
+.stamp {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  padding: 0.3rem 0.65rem;
+  border: 2px solid currentColor;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.68rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  transform: rotate(-3deg);
+  mask-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='120' height='120'><filter id='s'><feTurbulence type='fractalNoise' baseFrequency='1.4' numOctaves='1'/><feColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 -2.2 2.1'/></filter><rect width='100%' height='100%' filter='url(%23s)'/></svg>");
+}
+
+/* Animated thread (stroke draws itself) */
+.thread-draw {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: thread-draw 3.2s cubic-bezier(0.65, 0, 0.35, 1) forwards;
+}
+@keyframes thread-draw {
+  to { stroke-dashoffset: 0; }
+}
+.thread-flow {
+  stroke-dasharray: 6 8;
+  animation: thread-flow 1.2s linear infinite;
+}
+@keyframes thread-flow {
+  to { stroke-dashoffset: -28; }
+}
+
+.scrollbar-none::-webkit-scrollbar {
+  display: none;
+}
+.scrollbar-none {
+  scrollbar-width: none;
+}
+
+/* Leaflet tweaks */
+.leaflet-container {
+  font-family: var(--font-sans);
+  background: #efe9dc;
+}
+.leaflet-tile-pane {
+  filter: sepia(0.45) saturate(0.9) brightness(1.02);
+}
+.leaflet-div-icon {
+  background: transparent;
+  border: none;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: white;
+  }
+}
+
+/* Grid children must be allowed to shrink below their content (horizontal scrollers inside) */
+.grid > * {
+  min-width: 0;
 }
