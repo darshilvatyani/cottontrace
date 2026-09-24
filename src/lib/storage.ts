@@ -1,7 +1,7 @@
 /**
  * Off-chain document store. Only the SHA-256 digest of a file goes on the ledger.
  *
- *  - On Vercel (BLOB_READ_WRITE_TOKEN set): Vercel Blob, private access by default.
+ *  - On Vercel (BLOB_STORE_ID via OIDC, or BLOB_READ_WRITE_TOKEN): Vercel Blob, private by default.
  *  - Locally without a token: files on disk under STORAGE_ROOT (default ./storage).
  *
  * Stored files are never overwritten. The tamper demo writes a *new* altered copy and
@@ -12,7 +12,7 @@ import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { del, get, list, put } from "@vercel/blob";
 
-const blobEnabled = () => !!process.env.BLOB_READ_WRITE_TOKEN;
+const blobEnabled = () => !!(process.env.BLOB_READ_WRITE_TOKEN || process.env.BLOB_STORE_ID);
 const blobAccess = () => (process.env.BLOB_ACCESS === "public" ? "public" : "private");
 
 export const STORAGE_ROOT = process.env.STORAGE_ROOT ?? path.join(process.cwd(), "storage");
