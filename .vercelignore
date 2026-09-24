@@ -1,0 +1,10 @@
+# Local-only files that must never be uploaded to Vercel
+.env
+.env.*
+!.env.example
+prisma/pglite
+prisma/*.db
+storage
+.next
+node_modules
+src/generated
